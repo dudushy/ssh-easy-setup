@@ -265,9 +265,15 @@ ssh-list-keys() {
     printf "  %-4s %-14s %-25s %-10s %-12s\n" "---" "-----------" "----------------------" "--------" "----------"
 
     local i=1
+    local key_type=""
+    local key_comment=""
+    local date_added=""
+    local os_name=""
+    local user_host=""
+    local line=""
+
     while IFS= read -r line; do
         [ -z "${line}" ] && continue
-        local key_type key_comment date_added os_name user_host
         key_type=$(echo "${line}" | awk '{print $1}')
         key_comment=$(echo "${line}" | awk '{print $3}')
         [ -z "${key_comment}" ] && key_comment="(sem nome)"
@@ -285,9 +291,9 @@ ssh-list-keys() {
         # Tentar buscar data do metadata
         date_added=""
         if [ -f "${metadata_file}" ]; then
-            date_added=$(grep "|${key_comment}$" "${metadata_file}" | tail -1 | cut -d'|' -f1)
+            date_added=$(grep "|${key_comment}$" "${metadata_file}" 2>/dev/null | tail -1 | cut -d'|' -f1)
         fi
-        [ -z "${date_added}" ] && date_added="desconhecida"
+        [ -z "${date_added}" ] && date_added="--"
 
         printf "  %-4s %-14s %-25s %-10s %-12s\n" "${i}" "${key_type}" "${user_host}" "${os_name}" "${date_added}"
         i=$((i + 1))
