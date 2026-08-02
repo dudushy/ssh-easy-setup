@@ -124,7 +124,3 @@ O script do servidor segue uma ordem segura para evitar lock-out:
 4. ✅ Só então desabilita login por senha
 
 Se você não confirmar o teste, o login por senha **não** será desabilitado.
-
-## Licença
-
-MIT
