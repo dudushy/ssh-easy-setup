@@ -167,6 +167,90 @@ function Main {
     Write-Info "Ou, se for a primeira vez configurando o Pi:"
     Write-Host '    curl -sSL https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/server/setup-pi.sh | bash' -ForegroundColor Yellow
     Write-Host ""
+
+    # Configurar ~/.ssh/config
+    Write-Host ""
+    Write-Host "=============================================" -ForegroundColor Cyan
+    Write-Host "   CONFIGURAR SSH CONFIG" -ForegroundColor Cyan
+    Write-Host "=============================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Step "Deseja configurar o ~/.ssh/config para conectar facilmente ao Pi?"
+    Write-Info "Isso permite usar 'ssh pi' ao inves de 'ssh -i ~/.ssh/raspberrypi pi@host'"
+    Write-Host ""
+    $configChoice = Read-Host "    Configurar? (S/n)"
+
+    if ($configChoice -ne "n" -and $configChoice -ne "N") {
+        $piHost = Read-Host "    Digite o hostname ou IP do Pi (ex: 192.168.1.100 ou pi.exemplo.com)"
+
+        if ([string]::IsNullOrWhiteSpace($piHost)) {
+            Write-Error-Custom "Hostname vazio. Pulando configuracao do SSH config."
+        } else {
+            $piUser = Read-Host "    Digite o usuario do Pi (ex: pi) [padrao: pi]"
+            if ([string]::IsNullOrWhiteSpace($piUser)) {
+                $piUser = "pi"
+            }
+
+            $hostAlias = Read-Host "    Digite o alias para o SSH (ex: pi) [padrao: pi]"
+            if ([string]::IsNullOrWhiteSpace($hostAlias)) {
+                $hostAlias = "pi"
+            }
+
+            $sshConfigPath = Join-Path $sshDir "config"
+
+            # Verificar se já existe um bloco "Host pi" no config
+            $configExists = $false
+            if (Test-Path $sshConfigPath) {
+                $existingConfig = Get-Content $sshConfigPath -Raw
+                if ($existingConfig -match "(?m)^Host\s+$hostAlias\s*$") {
+                    $configExists = $true
+                }
+            }
+
+            $newBlock = @"
+
+Host $hostAlias
+    HostName $piHost
+    User $piUser
+    IdentityFile ~/.ssh/raspberrypi
+"@
+
+            if ($configExists) {
+                Write-Info "Ja existe um bloco 'Host pi' no config."
+                $overwriteConfig = Read-Host "    Deseja sobrescrever? (s/N)"
+                if ($overwriteConfig -eq "s" -or $overwriteConfig -eq "S") {
+                    # Remover bloco antigo e adicionar novo
+                    $lines = Get-Content $sshConfigPath
+                    $newLines = @()
+                    $skip = $false
+                    foreach ($line in $lines) {
+                        if ($line -match "^Host\s+$hostAlias\s*$") {
+                            $skip = $true
+                            continue
+                        }
+                        if ($skip -and $line -match "^Host\s+") {
+                            $skip = $false
+                        }
+                        if (-not $skip) {
+                            $newLines += $line
+                        }
+                    }
+                    $newLines | Set-Content $sshConfigPath
+                    Add-Content $sshConfigPath $newBlock
+                    Write-Success "SSH config atualizado!"
+                } else {
+                    Write-Info "Config mantido sem alteracoes."
+                }
+            } else {
+                # Adicionar novo bloco
+                Add-Content $sshConfigPath $newBlock
+                Write-Success "SSH config configurado!"
+            }
+
+            Write-Host ""
+            Write-Success "Agora voce pode conectar com: ssh $hostAlias"
+        }
+    }
+    Write-Host ""
 }
 
 # Executar

@@ -180,6 +180,71 @@ main() {
     info "Ou, se for a primeira vez configurando o Pi:"
     echo -e "    ${YELLOW}curl -sSL https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/server/setup-pi.sh | bash${NC}"
     echo ""
+
+    # Configurar ~/.ssh/config
+    echo ""
+    echo -e "${CYAN}=============================================${NC}"
+    echo -e "${CYAN}   CONFIGURAR SSH CONFIG${NC}"
+    echo -e "${CYAN}=============================================${NC}"
+    echo ""
+    step "Deseja configurar o ~/.ssh/config para conectar facilmente ao Pi?"
+    info "Isso permite usar 'ssh pi' ao inves de 'ssh -i ~/.ssh/raspberrypi pi@host'"
+    echo ""
+    echo -n "    Configurar? (S/n) " > /dev/tty
+    read -r config_choice < /dev/tty
+
+    if [ "${config_choice}" != "n" ] && [ "${config_choice}" != "N" ]; then
+        echo -n "    Digite o hostname ou IP do Pi (ex: 192.168.1.100 ou pi.exemplo.com): " > /dev/tty
+        read -r pi_host < /dev/tty
+
+        if [ -z "${pi_host}" ]; then
+            error "Hostname vazio. Pulando configuracao do SSH config."
+        else
+            echo -n "    Digite o usuario do Pi (ex: pi) [padrao: pi]: " > /dev/tty
+            read -r pi_user < /dev/tty
+            [ -z "${pi_user}" ] && pi_user="pi"
+
+            echo -n "    Digite o alias para o SSH (ex: pi) [padrao: pi]: " > /dev/tty
+            read -r host_alias < /dev/tty
+            [ -z "${host_alias}" ] && host_alias="pi"
+
+            SSH_CONFIG="${SSH_DIR}/config"
+
+            NEW_BLOCK="
+Host ${host_alias}
+    HostName ${pi_host}
+    User ${pi_user}
+    IdentityFile ~/.ssh/raspberrypi"
+
+            # Verificar se já existe um bloco com esse alias no config
+            if [ -f "${SSH_CONFIG}" ] && grep -q "^Host ${host_alias}$" "${SSH_CONFIG}"; then
+                info "Ja existe um bloco 'Host ${host_alias}' no config."
+                echo -n "    Deseja sobrescrever? (s/N) " > /dev/tty
+                read -r overwrite_config < /dev/tty
+
+                if [ "${overwrite_config}" = "s" ] || [ "${overwrite_config}" = "S" ]; then
+                    # Remover bloco antigo (do "Host alias" até o próximo "Host " ou fim do arquivo)
+                    sed -i "/^Host ${host_alias}$/,/^Host /{/^Host ${host_alias}$/d;/^Host /!d}" "${SSH_CONFIG}"
+                    # Remover linhas vazias consecutivas no final
+                    sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "${SSH_CONFIG}"
+                    echo "${NEW_BLOCK}" >> "${SSH_CONFIG}"
+                    success "SSH config atualizado!"
+                else
+                    info "Config mantido sem alteracoes."
+                fi
+            else
+                # Criar arquivo se não existir
+                touch "${SSH_CONFIG}"
+                chmod 600 "${SSH_CONFIG}"
+                echo "${NEW_BLOCK}" >> "${SSH_CONFIG}"
+                success "SSH config configurado!"
+            fi
+
+            echo ""
+            success "Agora voce pode conectar com: ssh ${host_alias}"
+        fi
+    fi
+    echo ""
 }
 
 # Executar
