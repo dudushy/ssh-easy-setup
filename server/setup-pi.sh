@@ -163,11 +163,21 @@ read_key_from_file() {
 read_key_interactive() {
     local key=""
     while true; do
-        echo ""
-        step "Cole a chave publica abaixo e pressione ENTER:"
-        info "(Formato: ssh-ed25519 AAAA... usuario@maquina)"
-        echo ""
+        echo "" > /dev/tty
+        echo -e "${YELLOW}[*]${NC} Cole a chave publica abaixo e pressione ENTER:" > /dev/tty
+        echo -e "    ${GRAY}Exemplo: ssh-ed25519 AAAA...dados... usuario@MAQUINA-OS${NC}" > /dev/tty
+        echo -e "    ${GRAY}(Digite 'q' para cancelar)${NC}" > /dev/tty
+        echo "" > /dev/tty
+        echo -n "  > " > /dev/tty
         read -r key < /dev/tty
+
+        # Permitir sair
+        if [ "${key}" = "q" ] || [ "${key}" = "Q" ]; then
+            echo "" > /dev/tty
+            echo -e "${RED}[!]${NC} Operacao cancelada pelo usuario." > /dev/tty
+            echo ""
+            return 1
+        fi
 
         # Validar antes de retornar
         if validate_key "${key}"; then
@@ -175,8 +185,10 @@ read_key_interactive() {
             return 0
         fi
 
-        error "Formato invalido. Tente novamente."
-        info "A chave deve comecar com: ssh-ed25519, ssh-rsa, ssh-ecdsa ou ssh-dsa"
+        echo "" > /dev/tty
+        echo -e "${RED}[!]${NC} Formato invalido. A chave deve comecar com:" > /dev/tty
+        echo -e "    ${GRAY}ssh-ed25519, ssh-rsa, ssh-ecdsa ou ssh-dsa${NC}" > /dev/tty
+        echo -e "    ${GRAY}Seguido dos dados da chave e o comentario.${NC}" > /dev/tty
     done
 }
 
@@ -358,13 +370,18 @@ main() {
     echo -e "${CYAN}   ADICIONAR CHAVE SSH${NC}"
     echo -e "${CYAN}=============================================${NC}"
     echo ""
-    step "Voce precisa adicionar pelo menos 1 chave antes de desabilitar o login por senha."
-    echo ""
 
-    # Verificar se recebeu parâmetros
+    # Verificar se já existem chaves no authorized_keys
+    local existing_keys=0
+    if [ -f "${AUTHORIZED_KEYS}" ] && [ -s "${AUTHORIZED_KEYS}" ]; then
+        existing_keys=$(grep -c "^ssh-" "${AUTHORIZED_KEYS}" 2>/dev/null || echo "0")
+    fi
+
     local key=""
     local key_from_param=false
+    local skip_add=false
 
+    # Verificar se recebeu parâmetros
     for arg in "$@"; do
         case "${arg}" in
             --file-path=*)
@@ -379,66 +396,110 @@ main() {
         esac
     done
 
-    # Se não recebeu parâmetros, modo interativo (já valida internamente)
-    if [ -z "${key}" ]; then
-        key=$(read_key_interactive)
-    fi
+    if [ -z "${key}" ] && [ "${existing_keys}" -gt 0 ]; then
+        # Já existem chaves — oferecer opção de pular
+        success "Ja existem ${existing_keys} chave(s) no authorized_keys."
+        echo ""
+        step "Deseja adicionar outra chave ou pular para a configuracao de seguranca?"
+        echo ""
+        info "a = Adicionar outra chave"
+        info "p = Pular (ir direto para desabilitar senha)"
+        echo ""
+        local choice
+        choice=$(read_confirm "    Escolha (a/p): ")
 
-    # Validar e adicionar a chave
-    if [ -z "${key}" ]; then
-        error "Nenhuma chave fornecida. Abortando."
-        exit 1
-    fi
-
-    # Só valida se veio de parâmetro (interativo já validou)
-    if [ "${key_from_param}" = true ]; then
-        if ! validate_key "${key}"; then
-            error "Formato de chave invalido."
-            info "Formato esperado: ssh-ed25519 AAAA... usuario@maquina"
-            exit 1
+        if [ "${choice}" = "p" ] || [ "${choice}" = "P" ]; then
+            skip_add=true
         fi
     fi
 
-    add_key_to_file "${key}" || true
+    if [ "${skip_add}" = false ]; then
+        # Precisa adicionar uma chave
+        if [ "${existing_keys}" -eq 0 ]; then
+            step "Voce precisa adicionar pelo menos 1 chave antes de desabilitar o login por senha."
+            echo ""
+        fi
 
-    # 4. Pedir confirmação de teste
-    echo ""
-    echo -e "${CYAN}=============================================${NC}"
-    echo -e "${CYAN}   TESTE DE CONEXAO${NC}"
-    echo -e "${CYAN}=============================================${NC}"
-    echo ""
-    warn "IMPORTANTE: Antes de desabilitar o login por senha,"
-    warn "teste a conexao SSH com a chave em OUTRO terminal:"
-    echo ""
-    echo -e "    ${YELLOW}ssh -i ~/.ssh/raspberrypi pi@<IP_DO_PI>${NC}"
-    echo ""
-    step "A conexao via chave funcionou corretamente?"
-    echo ""
-    confirm=$(read_confirm "    Digite 's' para confirmar ou 'n' para cancelar: ")
-
-    if [ "${confirm}" != "s" ] && [ "${confirm}" != "S" ]; then
-        echo ""
-        warn "Operacao parcial: PubkeyAuthentication esta habilitado mas login por senha NAO foi desabilitado."
-        info "Voce ainda pode acessar o Pi com senha."
-        info "Quando testar a chave, rode novamente este script ou execute manualmente:"
-        info "  sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config"
-        info "  sudo systemctl restart ssh"
-        echo ""
-
-        # Instalar aliases mesmo sem desabilitar senha
-        install_aliases
-        echo ""
-        success "Aliases instalados! Rode 'source ${SHELL_RC}' para ativar."
-        echo ""
-        exit 0
+        # Se não recebeu parâmetros, modo interativo
+        if [ -z "${key}" ]; then
+            key=$(read_key_interactive)
+            if [ $? -ne 0 ] || [ -z "${key}" ]; then
+                # Usuário cancelou
+                if [ "${existing_keys}" -eq 0 ]; then
+                    error "Nenhuma chave adicionada. Abortando."
+                    exit 1
+                else
+                    warn "Nenhuma chave nova adicionada. Continuando com as existentes..."
+                fi
+            else
+                # Só valida se veio de parâmetro (interativo já validou)
+                if [ "${key_from_param}" = true ]; then
+                    if ! validate_key "${key}"; then
+                        error "Formato de chave invalido."
+                        info "Formato esperado: ssh-ed25519 AAAA... usuario@maquina-OS"
+                        exit 1
+                    fi
+                fi
+                add_key_to_file "${key}" || true
+            fi
+        else
+            # Veio de parâmetro
+            if [ "${key_from_param}" = true ]; then
+                if ! validate_key "${key}"; then
+                    error "Formato de chave invalido."
+                    info "Formato esperado: ssh-ed25519 AAAA... usuario@maquina-OS"
+                    exit 1
+                fi
+            fi
+            add_key_to_file "${key}" || true
+        fi
     fi
 
-    # 5. Desabilitar login por senha
+    # 4. Pedir confirmação de teste e desabilitar senha
     echo ""
-    disable_password_auth
+    echo -e "${CYAN}=============================================${NC}"
+    echo -e "${CYAN}   CONFIGURACAO DE SEGURANCA${NC}"
+    echo -e "${CYAN}=============================================${NC}"
+    echo ""
 
-    # 6. Reiniciar SSH
-    restart_ssh
+    # Verificar se senha já está desabilitada
+    if grep -q "^PasswordAuthentication no" "${SSHD_CONFIG}"; then
+        info "PasswordAuthentication ja esta desabilitado."
+        echo ""
+    else
+        warn "IMPORTANTE: Antes de desabilitar o login por senha,"
+        warn "teste a conexao SSH com a chave em OUTRO terminal:"
+        echo ""
+        echo -e "    ${YELLOW}ssh -i ~/.ssh/raspberrypi pi@<IP_DO_PI>${NC}"
+        echo ""
+        step "A conexao via chave funcionou corretamente?"
+        echo ""
+        confirm=$(read_confirm "    Digite 's' para confirmar ou 'n' para cancelar: ")
+
+        if [ "${confirm}" != "s" ] && [ "${confirm}" != "S" ]; then
+            echo ""
+            warn "Operacao parcial: PubkeyAuthentication esta habilitado mas login por senha NAO foi desabilitado."
+            info "Voce ainda pode acessar o Pi com senha."
+            info "Quando testar a chave, rode novamente este script ou execute manualmente:"
+            info "  sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config"
+            info "  sudo systemctl restart ssh"
+            echo ""
+
+            # Instalar aliases mesmo sem desabilitar senha
+            install_aliases
+            echo ""
+            success "Aliases instalados! Rode 'source ${SHELL_RC}' para ativar."
+            echo ""
+            exit 0
+        fi
+
+        # 5. Desabilitar login por senha
+        echo ""
+        disable_password_auth
+
+        # 6. Reiniciar SSH
+        restart_ssh
+    fi
 
     # 7. Instalar aliases
     echo ""

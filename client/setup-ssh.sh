@@ -95,7 +95,8 @@ main() {
     if [ -f "${KEY_PATH}" ]; then
         error "A chave ja existe em: ${KEY_PATH}"
         echo ""
-        read -r -p "    Deseja sobrescrever? (s/N) " overwrite
+        echo -n "    Deseja sobrescrever? (s/N) " > /dev/tty
+        read -r overwrite < /dev/tty
         if [ "${overwrite}" != "s" ] && [ "${overwrite}" != "S" ]; then
             echo ""
             step "Operacao cancelada."
@@ -115,7 +116,8 @@ main() {
     step "Passphrase (senha para proteger a chave):"
     info "Pressione ENTER para deixar sem senha (menos seguro, mais pratico)"
     echo ""
-    read -r -s -p "    Digite a passphrase (ou ENTER para vazio): " PASSPHRASE
+    echo -n "    Digite a passphrase (ou ENTER para vazio): " > /dev/tty
+    read -r -s PASSPHRASE < /dev/tty
     echo ""
 
     # Gerar a chave
