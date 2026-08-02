@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/prettierrc",
+  "semi": true,
+  "printWidth": 120,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "endOfLine": "lf",
+  "tabWidth": 2,
+  "useTabs": false,
+  "proseWrap": "preserve",
+  "arrowParens": "always",
+  "bracketSameLine": false,
+  "bracketSpacing": true,
+  "checkIgnorePragma": false,
+  "cursorOffset": -1,
+  "embeddedLanguageFormatting": "auto",
+  "htmlWhitespaceSensitivity": "css",
+  "insertPragma": false,
+  "jsxSingleQuote": false,
+  "objectWrap": "preserve",
+  "quoteProps": "as-needed",
+  "requirePragma": false,
+  "singleAttributePerLine": false,
+  "overrides": [
+    {
+      "files": "*.html",
+      "options": {
+        "parser": "angular"
+      }
+    },
+    {
+      "files": "*.md",
+      "options": {
+        "tabWidth": 4,
+        "proseWrap": "preserve"
+      }
+    }
+  ]
+}
