@@ -334,10 +334,80 @@ ssh-add-key() {
     echo "[+] Chave adicionada com sucesso: ${comment} (${date_added})"
 }
 
+# Remove uma chave SSH do authorized_keys pelo número
+ssh-remove-key() {
+    local key_number="$1"
+    local metadata_file="${HOME}/.ssh/.keys_metadata"
+    local authorized_keys="${HOME}/.ssh/authorized_keys"
+
+    if [ ! -f "${authorized_keys}" ] || [ ! -s "${authorized_keys}" ]; then
+        echo "[!] Nenhuma chave encontrada."
+        return 1
+    fi
+
+    # Se não recebeu argumento, mostrar lista e pedir número
+    if [ -z "${key_number}" ]; then
+        ssh-list-keys
+        echo ""
+        echo -n "[*] Digite o numero da chave para remover (ou 'q' para cancelar): "
+        read -r key_number
+    fi
+
+    # Cancelar
+    if [ "${key_number}" = "q" ] || [ "${key_number}" = "Q" ]; then
+        echo "[*] Operacao cancelada."
+        return 0
+    fi
+
+    # Validar número
+    if ! echo "${key_number}" | grep -qE "^[0-9]+$"; then
+        echo "[!] Numero invalido."
+        return 1
+    fi
+
+    # Contar chaves válidas
+    local total_keys
+    total_keys=$(grep -c "^ssh-" "${authorized_keys}" 2>/dev/null || echo "0")
+
+    if [ "${key_number}" -lt 1 ] || [ "${key_number}" -gt "${total_keys}" ]; then
+        echo "[!] Numero fora do intervalo (1-${total_keys})."
+        return 1
+    fi
+
+    # Obter a chave pela posição
+    local key_line key_comment
+    key_line=$(grep "^ssh-" "${authorized_keys}" | sed -n "${key_number}p")
+    key_comment=$(echo "${key_line}" | awk '{print $3}')
+    [ -z "${key_comment}" ] && key_comment="(sem nome)"
+
+    # Confirmar remoção
+    echo ""
+    echo "[!] Remover chave #${key_number}: ${key_comment}?"
+    echo -n "    Confirma? (s/N): "
+    read -r confirm
+
+    if [ "${confirm}" != "s" ] && [ "${confirm}" != "S" ]; then
+        echo "[*] Operacao cancelada."
+        return 0
+    fi
+
+    # Remover a linha do authorized_keys
+    local key_data
+    key_data=$(echo "${key_line}" | awk '{print $2}')
+    sed -i "\|${key_data}|d" "${authorized_keys}"
+
+    # Remover do metadata
+    if [ -f "${metadata_file}" ] && [ -n "${key_comment}" ] && [ "${key_comment}" != "(sem nome)" ]; then
+        sed -i "\|${key_comment}$|d" "${metadata_file}"
+    fi
+
+    echo "[+] Chave removida: ${key_comment}"
+}
+
 # --- End SSH Easy Setup Aliases ---
 ALIASES
 
-    success "Aliases instalados: ssh-list-keys, ssh-add-key"
+    success "Aliases instalados: ssh-list-keys, ssh-add-key, ssh-remove-key"
 }
 
 # --- Fluxo principal ---
@@ -519,9 +589,11 @@ main() {
     step "Rode 'source ${SHELL_RC}' para ativar os aliases nesta sessao."
     echo ""
     step "Comandos disponiveis:"
-    info "ssh-list-keys       - Lista todas as chaves autorizadas"
-    info "ssh-add-key         - Adiciona uma nova chave (interativo)"
-    info "ssh-add-key \"chave\" - Adiciona uma nova chave (direto)"
+    info "ssh-list-keys         - Lista todas as chaves autorizadas"
+    info "ssh-add-key           - Adiciona uma nova chave (interativo)"
+    info "ssh-add-key \"chave\"   - Adiciona uma nova chave (direto)"
+    info "ssh-remove-key        - Remove uma chave (interativo)"
+    info "ssh-remove-key <num>  - Remove uma chave pelo numero"
     echo ""
 }
 
