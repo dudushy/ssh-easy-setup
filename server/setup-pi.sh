@@ -49,8 +49,34 @@ warn() {
 SSH_DIR="${HOME}/.ssh"
 AUTHORIZED_KEYS="${SSH_DIR}/authorized_keys"
 SSHD_CONFIG="/etc/ssh/sshd_config"
-BASHRC="${HOME}/.bashrc"
 METADATA_FILE="${SSH_DIR}/.keys_metadata"
+
+# Detectar o shell do usuário e definir o RC file correto
+detect_shell_rc() {
+    local user_shell
+    user_shell=$(basename "${SHELL:-/bin/bash}")
+
+    case "${user_shell}" in
+        zsh)
+            SHELL_RC="${HOME}/.zshrc"
+            SHELL_NAME="zsh"
+            ;;
+        bash)
+            SHELL_RC="${HOME}/.bashrc"
+            SHELL_NAME="bash"
+            ;;
+        *)
+            # Fallback: verificar se .zshrc existe (pode estar usando zsh sem $SHELL atualizado)
+            if [ -f "${HOME}/.zshrc" ]; then
+                SHELL_RC="${HOME}/.zshrc"
+                SHELL_NAME="zsh"
+            else
+                SHELL_RC="${HOME}/.bashrc"
+                SHELL_NAME="bash"
+            fi
+            ;;
+    esac
+}
 
 # --- Funções auxiliares ---
 
@@ -133,13 +159,21 @@ read_key_from_file() {
     cat "${file_path}"
 }
 
-# Pedir chave interativamente
+# Pedir chave interativamente (lê do /dev/tty para funcionar via pipe)
 read_key_interactive() {
     echo ""
     step "Cole a chave publica abaixo e pressione ENTER:"
     echo ""
-    read -r key
+    read -r key < /dev/tty
     echo "${key}"
+}
+
+# Pedir confirmação (lê do /dev/tty para funcionar via pipe)
+read_confirm() {
+    local prompt="$1"
+    local response
+    read -r -p "${prompt}" response < /dev/tty
+    echo "${response}"
 }
 
 # --- Configuração do sshd_config ---
@@ -179,16 +213,16 @@ restart_ssh() {
 # --- Instalação dos aliases ---
 
 install_aliases() {
-    step "Instalando aliases no .bashrc..."
+    step "Instalando aliases no ${SHELL_RC} (${SHELL_NAME})..."
 
     # Verificar se os aliases já existem
-    if grep -q "# --- SSH Easy Setup Aliases ---" "${BASHRC}" 2>/dev/null; then
+    if grep -q "# --- SSH Easy Setup Aliases ---" "${SHELL_RC}" 2>/dev/null; then
         warn "Aliases ja estao instalados. Atualizando..."
         # Remover aliases antigos
-        sed -i '/# --- SSH Easy Setup Aliases ---/,/# --- End SSH Easy Setup Aliases ---/d' "${BASHRC}"
+        sed -i '/# --- SSH Easy Setup Aliases ---/,/# --- End SSH Easy Setup Aliases ---/d' "${SHELL_RC}"
     fi
 
-    cat >> "${BASHRC}" << 'ALIASES'
+    cat >> "${SHELL_RC}" << 'ALIASES'
 
 # --- SSH Easy Setup Aliases ---
 
@@ -283,7 +317,11 @@ main() {
         exit 1
     fi
 
+    # Detectar shell do usuário
+    detect_shell_rc
+
     step "Iniciando configuracao do Raspberry Pi..."
+    info "Shell detectado: ${SHELL_NAME} (${SHELL_RC})"
     echo ""
 
     # 1. Garantir diretório SSH
@@ -348,7 +386,7 @@ main() {
     echo ""
     step "A conexao via chave funcionou corretamente?"
     echo ""
-    read -r -p "    Digite 's' para confirmar ou 'n' para cancelar: " confirm
+    confirm=$(read_confirm "    Digite 's' para confirmar ou 'n' para cancelar: ")
 
     if [ "${confirm}" != "s" ] && [ "${confirm}" != "S" ]; then
         echo ""
@@ -362,7 +400,7 @@ main() {
         # Instalar aliases mesmo sem desabilitar senha
         install_aliases
         echo ""
-        success "Aliases instalados! Rode 'source ~/.bashrc' para ativar."
+        success "Aliases instalados! Rode 'source ${SHELL_RC}' para ativar."
         echo ""
         exit 0
     fi
@@ -387,9 +425,9 @@ main() {
     success "Resumo:"
     info "- PubkeyAuthentication: habilitado"
     info "- PasswordAuthentication: desabilitado"
-    info "- Aliases instalados: ssh-list-keys, ssh-add-key"
+    info "- Aliases instalados em: ${SHELL_RC}"
     echo ""
-    step "Rode 'source ~/.bashrc' para ativar os aliases nesta sessao."
+    step "Rode 'source ${SHELL_RC}' para ativar os aliases nesta sessao."
     echo ""
     step "Comandos disponiveis:"
     info "ssh-list-keys       - Lista todas as chaves autorizadas"
