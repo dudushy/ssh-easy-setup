@@ -76,7 +76,12 @@ curl -sSL .../server/setup-pi.sh | bash -s -- --file-path=/tmp/chave.pub
 
 # Via texto direto
 curl -sSL .../server/setup-pi.sh | bash -s -- --raw-data="ssh-ed25519 AAAA... usuario@MAQUINA"
+
+# Modo interativo (o script pede para colar a chave)
+curl -sSL .../server/setup-pi.sh | bash
 ```
+
+> **Nota:** Quando executado via `curl | bash`, o modo interativo lê input do `/dev/tty` (seu teclado), então funciona normalmente mesmo com o pipe.
 
 ## Estrutura
 

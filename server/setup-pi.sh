@@ -161,11 +161,23 @@ read_key_from_file() {
 
 # Pedir chave interativamente (lê do /dev/tty para funcionar via pipe)
 read_key_interactive() {
-    echo ""
-    step "Cole a chave publica abaixo e pressione ENTER:"
-    echo ""
-    read -r key < /dev/tty
-    echo "${key}"
+    local key=""
+    while true; do
+        echo ""
+        step "Cole a chave publica abaixo e pressione ENTER:"
+        info "(Formato: ssh-ed25519 AAAA... usuario@maquina)"
+        echo ""
+        read -r key < /dev/tty
+
+        # Validar antes de retornar
+        if validate_key "${key}"; then
+            echo "${key}"
+            return 0
+        fi
+
+        error "Formato invalido. Tente novamente."
+        info "A chave deve comecar com: ssh-ed25519, ssh-rsa, ssh-ecdsa ou ssh-dsa"
+    done
 }
 
 # Pedir confirmação (lê do /dev/tty para funcionar via pipe)
@@ -341,20 +353,23 @@ main() {
 
     # Verificar se recebeu parâmetros
     local key=""
+    local key_from_param=false
 
     for arg in "$@"; do
         case "${arg}" in
             --file-path=*)
                 local file_path="${arg#*=}"
                 key=$(read_key_from_file "${file_path}")
+                key_from_param=true
                 ;;
             --raw-data=*)
                 key="${arg#*=}"
+                key_from_param=true
                 ;;
         esac
     done
 
-    # Se não recebeu parâmetros, modo interativo
+    # Se não recebeu parâmetros, modo interativo (já valida internamente)
     if [ -z "${key}" ]; then
         key=$(read_key_interactive)
     fi
@@ -365,10 +380,13 @@ main() {
         exit 1
     fi
 
-    if ! validate_key "${key}"; then
-        error "Formato de chave invalido."
-        info "Formato esperado: ssh-ed25519 AAAA... usuario@maquina"
-        exit 1
+    # Só valida se veio de parâmetro (interativo já validou)
+    if [ "${key_from_param}" = true ]; then
+        if ! validate_key "${key}"; then
+            error "Formato de chave invalido."
+            info "Formato esperado: ssh-ed25519 AAAA... usuario@maquina"
+            exit 1
+        fi
     fi
 
     add_key_to_file "${key}" || true
