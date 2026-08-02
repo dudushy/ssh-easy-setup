@@ -42,10 +42,15 @@ function Write-Info {
 function Get-SystemInfo {
     $username = $env:USERNAME
     $hostname = $env:COMPUTERNAME
+
+    # Detectar OS
+    $os = "Windows"
+
     return @{
         Username = $username
         Hostname = $hostname
-        Comment  = "$username@$hostname"
+        OS       = $os
+        Comment  = "$username@$hostname-$os"
     }
 }
 
@@ -58,6 +63,7 @@ function Main {
     Write-Step "Informacoes detectadas:"
     Write-Info "Usuario:  $($sysInfo.Username)"
     Write-Info "Maquina:  $($sysInfo.Hostname)"
+    Write-Info "Sistema:  $($sysInfo.OS)"
     Write-Info "Comentario da chave: $($sysInfo.Comment)"
     Write-Host ""
 

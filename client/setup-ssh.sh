@@ -43,7 +43,27 @@ info() {
 detect_system_info() {
     USERNAME=$(whoami)
     HOSTNAME_DETECTED=$(hostname)
-    COMMENT="${USERNAME}@${HOSTNAME_DETECTED}"
+
+    # Detectar OS
+    case "$(uname -s)" in
+        Linux*)
+            if [ -f /etc/os-release ]; then
+                OS_NAME=$(. /etc/os-release && echo "${ID^}")
+                # Capitalizar primeira letra
+                OS_NAME=$(echo "${OS_NAME}" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
+            else
+                OS_NAME="Linux"
+            fi
+            ;;
+        Darwin*)
+            OS_NAME="macOS"
+            ;;
+        *)
+            OS_NAME="Unknown"
+            ;;
+    esac
+
+    COMMENT="${USERNAME}@${HOSTNAME_DETECTED}-${OS_NAME}"
 }
 
 # --- Main ---
@@ -55,6 +75,7 @@ main() {
     step "Informacoes detectadas:"
     info "Usuario:  ${USERNAME}"
     info "Maquina:  ${HOSTNAME_DETECTED}"
+    info "Sistema:  ${OS_NAME}"
     info "Comentario da chave: ${COMMENT}"
     echo ""
 
