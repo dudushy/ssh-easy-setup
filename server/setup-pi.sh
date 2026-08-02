@@ -264,25 +264,19 @@ ssh-list-keys() {
     printf "  %-4s %-14s %-25s %-10s %-12s\n" "#" "TIPO" "NOME" "OS" "ADICIONADA"
     printf "  %-4s %-14s %-25s %-10s %-12s\n" "---" "-----------" "----------------------" "--------" "----------"
 
-    local i=1
-    local key_type=""
-    local key_comment=""
-    local date_added=""
-    local os_name=""
-    local user_host=""
-    local line=""
+    local i key_type key_comment date_added os_name user_host line
+    i=1
 
     while IFS= read -r line; do
         [ -z "${line}" ] && continue
-        key_type=$(echo "${line}" | awk '{print $1}')
-        key_comment=$(echo "${line}" | awk '{print $3}')
+        key_type="${line%% *}"
+        key_comment="$(echo "${line}" | awk '{print $3}')"
         [ -z "${key_comment}" ] && key_comment="(sem nome)"
 
         # Extrair OS do comentário (formato: usuario@MAQUINA-OS)
-        os_name=""
         if echo "${key_comment}" | grep -q ".*@.*-"; then
-            os_name=$(echo "${key_comment}" | sed 's/.*-//')
-            user_host=$(echo "${key_comment}" | sed 's/-[^-]*$//')
+            os_name="${key_comment##*-}"
+            user_host="${key_comment%-*}"
         else
             os_name="--"
             user_host="${key_comment}"
@@ -291,7 +285,7 @@ ssh-list-keys() {
         # Tentar buscar data do metadata
         date_added=""
         if [ -f "${metadata_file}" ]; then
-            date_added=$(grep "|${key_comment}$" "${metadata_file}" 2>/dev/null | tail -1 | cut -d'|' -f1)
+            date_added="$(grep "|${key_comment}$" "${metadata_file}" 2>/dev/null | tail -1 | cut -d'|' -f1)"
         fi
         [ -z "${date_added}" ] && date_added="--"
 
