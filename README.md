@@ -23,9 +23,16 @@ curl -sSL https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/client/s
 ```
 
 O script irá:
-- Detectar seu usuário e nome da máquina
+- Detectar seu **usuário**, **nome da máquina** e **sistema operacional**
 - Gerar uma chave `ed25519` salva em `~/.ssh/raspberrypi`
-- Exibir a chave pública para você copiar
+- Criar o comentário no formato: `usuario@MAQUINA-OS`
+- Perguntar se deseja definir uma passphrase (opcional)
+- Exibir a chave pública e copiar para a área de transferência
+
+**Exemplo de comentário gerado:**
+- Windows: `dudushy@BB1337-Windows`
+- Ubuntu: `dudushy@desktop-Ubuntu`
+- macOS: `dudushy@MacBook-macOS`
 
 ### 2. No Raspberry Pi — Configuração inicial (1ª vez)
 
@@ -34,17 +41,19 @@ curl -sSL https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/server/s
 ```
 
 O script irá:
-1. Habilitar autenticação por chave pública
-2. Pedir que você adicione sua chave
-3. Pedir confirmação de que testou a conexão
-4. Desabilitar login por senha (somente após confirmação)
-5. Instalar aliases úteis (`ssh-list-keys`, `ssh-add-key`)
+1. Detectar o shell do Pi (zsh ou bash) e instalar aliases no arquivo correto
+2. Habilitar `PubkeyAuthentication yes`
+3. Pedir que você cole/adicione sua chave pública
+4. Pedir confirmação de que **testou a conexão** em outro terminal
+5. Somente após confirmação: desabilitar `PasswordAuthentication no`
+6. Reiniciar o serviço SSH
+7. Instalar aliases (`ssh-list-keys`, `ssh-add-key`)
 
 ### 3. Adicionando novos dispositivos (após setup)
 
 No Pi, use o alias:
 ```bash
-ssh-add-key "ssh-ed25519 AAAA... usuario@MAQUINA"
+ssh-add-key "ssh-ed25519 AAAA... usuario@MAQUINA-OS"
 ```
 
 Ou no modo interativo:
@@ -60,10 +69,11 @@ ssh-list-keys
 
 Saída:
 ```
-  #    TIPO           NOME                      ADICIONADA
-  ---  -----------    ----------------------    ----------
-  1    ssh-ed25519    dudushy@BLACKAO           2026-08-02
-  2    ssh-ed25519    dudushy@NOTEBOOK          2026-08-03
+  #    TIPO           NOME                      OS         ADICIONADA
+  ---  -----------    ----------------------    --------   ----------
+  1    ssh-ed25519    dudushy@BB1337            Windows    2026-08-02
+  2    ssh-ed25519    dudushy@NOTEBOOK          Ubuntu     2026-08-03
+  3    ssh-ed25519    maria@MacBook             macOS      2026-08-05
 ```
 
 ## Parâmetros do script do servidor
@@ -75,7 +85,7 @@ O `setup-pi.sh` aceita parâmetros para adicionar a chave sem modo interativo:
 curl -sSL .../server/setup-pi.sh | bash -s -- --file-path=/tmp/chave.pub
 
 # Via texto direto
-curl -sSL .../server/setup-pi.sh | bash -s -- --raw-data="ssh-ed25519 AAAA... usuario@MAQUINA"
+curl -sSL .../server/setup-pi.sh | bash -s -- --raw-data="ssh-ed25519 AAAA... usuario@MAQUINA-OS"
 
 # Modo interativo (o script pede para colar a chave)
 curl -sSL .../server/setup-pi.sh | bash
@@ -95,13 +105,15 @@ curl -sSL .../server/setup-pi.sh | bash
 
 ## Decisões Técnicas
 
-| Item            | Valor                     |
-| --------------- | ------------------------- |
-| Tipo de chave   | ed25519                   |
-| Nome do arquivo | `~/.ssh/raspberrypi`      |
-| Identificação   | `usuario@NOME_DA_MAQUINA` |
-| Passphrase      | Opcional                  |
-| Usuário no Pi   | `pi`                      |
+| Item | Valor |
+|------|-------|
+| Tipo de chave | ed25519 |
+| Nome do arquivo | `~/.ssh/raspberrypi` |
+| Comentário da chave | `usuario@MAQUINA-OS` |
+| Passphrase | Opcional (pergunta ao usuário) |
+| Usuário no Pi | `pi` |
+| Shell suportado | zsh e bash (detecção automática) |
+| Input via pipe | Lê de `/dev/tty` (funciona com `curl \| bash`) |
 
 ## Segurança
 
