@@ -45,9 +45,14 @@ O script irá:
 2. Habilitar `PubkeyAuthentication yes`
 3. Pedir que você cole/adicione sua chave pública
 4. Pedir confirmação de que **testou a conexão** em outro terminal
-5. Somente após confirmação: desabilitar `PasswordAuthentication no`
+5. Somente após confirmação:
+   - Remover overrides do cloud-init (`sshd_config.d/50-cloud-init.conf`)
+   - Prevenir recriação pelo cloud-init em futuros boots
+   - Desabilitar `PasswordAuthentication no`
+   - Desabilitar `PermitRootLogin no`
 6. Reiniciar o serviço SSH
-7. Instalar aliases (`ssh-list-keys`, `ssh-add-key`)
+7. Verificar configuração efetiva com `sshd -T`
+8. Instalar aliases (`ssh-list-keys`, `ssh-add-key`, `ssh-remove-key`)
 
 ### 3. Adicionando novos dispositivos (após setup)
 
@@ -59,6 +64,17 @@ ssh-add-key "ssh-ed25519 AAAA... usuario@MAQUINA-OS"
 Ou no modo interativo:
 ```bash
 ssh-add-key
+```
+
+### 4. Removendo dispositivos
+
+```bash
+ssh-remove-key
+```
+
+Ou direto pelo número:
+```bash
+ssh-remove-key 2
 ```
 
 ### 4. Listando dispositivos autorizados
@@ -114,6 +130,9 @@ curl -sSL .../server/setup-pi.sh | bash
 | Usuário no Pi | `pi` |
 | Shell suportado | zsh e bash (detecção automática) |
 | Input via pipe | Lê de `/dev/tty` (funciona com `curl \| bash`) |
+| Root login | Desabilitado |
+| cloud-init | Override removido + prevenido |
+| Verificação | `sshd -T` confirma config efetiva |
 
 ## Segurança
 
@@ -121,6 +140,14 @@ O script do servidor segue uma ordem segura para evitar lock-out:
 1. ✅ Habilita autenticação por chave
 2. ✅ Adiciona pelo menos 1 chave
 3. ✅ Usuário confirma que testou a conexão
-4. ✅ Só então desabilita login por senha
+4. ✅ Remove overrides do cloud-init (`sshd_config.d/`)
+5. ✅ Previne recriação pelo cloud-init
+6. ✅ Desabilita login por senha
+7. ✅ Desabilita login root
+8. ✅ Reinicia SSH e verifica config efetiva (`sshd -T`)
 
 Se você não confirmar o teste, o login por senha **não** será desabilitado.
+
+### Problema comum: cloud-init
+
+No Raspberry Pi OS, o cloud-init cria `/etc/ssh/sshd_config.d/50-cloud-init.conf` com `PasswordAuthentication yes` no primeiro boot. Como o `Include` é processado antes do `sshd_config`, esse arquivo sobrescreve qualquer configuração manual. O script detecta e remove esses overrides automaticamente.

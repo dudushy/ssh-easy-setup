@@ -225,7 +225,90 @@ disable_password_auth() {
     if ! grep -q "^PasswordAuthentication no" "${SSHD_CONFIG}"; then
         echo "PasswordAuthentication no" | sudo tee -a "${SSHD_CONFIG}" > /dev/null
     fi
-    success "PasswordAuthentication desabilitado."
+    success "PasswordAuthentication desabilitado no sshd_config."
+}
+
+remove_password_overrides() {
+    step "Verificando overrides em /etc/ssh/sshd_config.d/..."
+
+    local found_override=false
+    if [ -d "/etc/ssh/sshd_config.d" ]; then
+        for f in /etc/ssh/sshd_config.d/*.conf; do
+            [ -f "$f" ] || continue
+            if sudo grep -qi "^PasswordAuthentication yes" "$f" 2>/dev/null; then
+                warn "Override encontrado: $f"
+                sudo rm "$f"
+                success "Override removido: $f"
+                found_override=true
+            fi
+        done
+    fi
+
+    if [ "${found_override}" = false ]; then
+        info "Nenhum override encontrado."
+    fi
+}
+
+prevent_cloud_init_override() {
+    step "Prevenindo recriacao pelo cloud-init..."
+
+    if [ -d "/etc/cloud" ] || command -v cloud-init &>/dev/null; then
+        sudo mkdir -p /etc/cloud/cloud.cfg.d
+        echo "ssh_pwauth: false" | sudo tee /etc/cloud/cloud.cfg.d/99-disable-ssh-pwauth.cfg > /dev/null
+        success "Cloud-init configurado para nao reabilitar senha SSH."
+    else
+        info "Cloud-init nao encontrado. Nada a prevenir."
+    fi
+}
+
+disable_root_login() {
+    step "Desabilitando login root via SSH..."
+
+    sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' "${SSHD_CONFIG}"
+    # Se a linha não existia, adicionar
+    if ! grep -q "^PermitRootLogin no" "${SSHD_CONFIG}"; then
+        echo "PermitRootLogin no" | sudo tee -a "${SSHD_CONFIG}" > /dev/null
+    fi
+
+    # Também verificar overrides no sshd_config.d
+    if [ -d "/etc/ssh/sshd_config.d" ]; then
+        for f in /etc/ssh/sshd_config.d/*.conf; do
+            [ -f "$f" ] || continue
+            if sudo grep -qi "^PermitRootLogin" "$f" 2>/dev/null; then
+                sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' "$f"
+            fi
+        done
+    fi
+
+    success "PermitRootLogin no configurado."
+}
+
+verify_sshd_config() {
+    step "Verificando configuracao efetiva do SSH..."
+    echo ""
+
+    local pw_auth root_login pubkey_auth
+    pw_auth=$(sudo sshd -T 2>/dev/null | grep -i "^passwordauthentication" | awk '{print $2}')
+    root_login=$(sudo sshd -T 2>/dev/null | grep -i "^permitrootlogin" | awk '{print $2}')
+    pubkey_auth=$(sudo sshd -T 2>/dev/null | grep -i "^pubkeyauthentication" | awk '{print $2}')
+
+    if [ "${pw_auth}" = "no" ]; then
+        success "PasswordAuthentication: no ✅"
+    else
+        error "PasswordAuthentication: ${pw_auth} ❌ (deveria ser 'no')"
+    fi
+
+    if [ "${pubkey_auth}" = "yes" ]; then
+        success "PubkeyAuthentication: yes ✅"
+    else
+        error "PubkeyAuthentication: ${pubkey_auth} ❌ (deveria ser 'yes')"
+    fi
+
+    if [ "${root_login}" = "no" ]; then
+        success "PermitRootLogin: no ✅"
+    else
+        warn "PermitRootLogin: ${root_login} (recomendado: 'no')"
+    fi
 }
 
 restart_ssh() {
@@ -532,10 +615,17 @@ main() {
     echo -e "${CYAN}=============================================${NC}"
     echo ""
 
-    # Verificar se senha já está desabilitada
-    if grep -q "^PasswordAuthentication no" "${SSHD_CONFIG}"; then
-        info "PasswordAuthentication ja esta desabilitado."
+    # Verificar configuração efetiva (não apenas o arquivo, mas o que o sshd realmente usa)
+    local effective_pw_auth
+    effective_pw_auth=$(sudo sshd -T 2>/dev/null | grep -i "^passwordauthentication" | awk '{print $2}')
+
+    if [ "${effective_pw_auth}" = "no" ]; then
+        info "PasswordAuthentication ja esta efetivamente desabilitado."
         echo ""
+
+        # Mesmo assim, verificar e aplicar proteções extras
+        disable_root_login
+        verify_sshd_config
     else
         warn "IMPORTANTE: Antes de desabilitar o login por senha,"
         warn "teste a conexao SSH com a chave em OUTRO terminal:"
@@ -551,6 +641,7 @@ main() {
             warn "Operacao parcial: PubkeyAuthentication esta habilitado mas login por senha NAO foi desabilitado."
             info "Voce ainda pode acessar o Pi com senha."
             info "Quando testar a chave, rode novamente este script ou execute manualmente:"
+            info "  sudo rm /etc/ssh/sshd_config.d/50-cloud-init.conf 2>/dev/null"
             info "  sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config"
             info "  sudo systemctl restart ssh"
             echo ""
@@ -563,15 +654,28 @@ main() {
             exit 0
         fi
 
-        # 5. Desabilitar login por senha
+        # 5. Remover overrides que impedem a desabilitação
         echo ""
+        remove_password_overrides
+
+        # 6. Prevenir recriação pelo cloud-init
+        prevent_cloud_init_override
+
+        # 7. Desabilitar login por senha no sshd_config
         disable_password_auth
 
-        # 6. Reiniciar SSH
+        # 8. Desabilitar login root
+        disable_root_login
+
+        # 9. Reiniciar SSH
         restart_ssh
+
+        # 10. Verificar configuração efetiva
+        echo ""
+        verify_sshd_config
     fi
 
-    # 7. Instalar aliases
+    # 11. Instalar aliases
     echo ""
     install_aliases
 
@@ -584,6 +688,8 @@ main() {
     success "Resumo:"
     info "- PubkeyAuthentication: habilitado"
     info "- PasswordAuthentication: desabilitado"
+    info "- PermitRootLogin: desabilitado"
+    info "- Overrides do cloud-init: removidos/prevenidos"
     info "- Aliases instalados em: ${SHELL_RC}"
     echo ""
     step "Rode 'source ${SHELL_RC}' para ativar os aliases nesta sessao."
@@ -594,6 +700,13 @@ main() {
     info "ssh-add-key \"chave\"   - Adiciona uma nova chave (direto)"
     info "ssh-remove-key        - Remove uma chave (interativo)"
     info "ssh-remove-key <num>  - Remove uma chave pelo numero"
+    echo ""
+    echo -e "${CYAN}---${NC}"
+    echo ""
+    step "Dica de seguranca:"
+    info "Considere instalar fail2ban para bloquear IPs com tentativas repetidas:"
+    info "  sudo apt install fail2ban -y"
+    info "  sudo systemctl enable fail2ban"
     echo ""
 }
 
