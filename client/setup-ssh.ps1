@@ -110,16 +110,11 @@ function Main {
     Write-Host ""
     Write-Step "Gerando chave SSH ed25519..."
 
-    $sshKeygenArgs = @(
-        "-t", "ed25519",
-        "-C", $sysInfo.Comment,
-        "-f", $keyPath,
-        "-N", $passphrase
-    )
+    # Usar & para chamar ssh-keygen diretamente (Start-Process não lida bem com string vazia)
+    & ssh-keygen -t ed25519 -C $sysInfo.Comment -f $keyPath -N "$passphrase" 2>&1 | Out-Null
+    $exitCode = $LASTEXITCODE
 
-    $process = Start-Process -FilePath "ssh-keygen" -ArgumentList $sshKeygenArgs -NoNewWindow -Wait -PassThru
-
-    if ($process.ExitCode -ne 0) {
+    if ($exitCode -ne 0) {
         Write-Error-Custom "Erro ao gerar a chave SSH."
         return
     }
