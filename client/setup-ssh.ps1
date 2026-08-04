@@ -110,8 +110,12 @@ function Main {
     Write-Host ""
     Write-Step "Gerando chave SSH ed25519..."
 
-    # Usar & para chamar ssh-keygen diretamente (Start-Process não lida bem com string vazia)
-    & ssh-keygen -t ed25519 -C $sysInfo.Comment -f $keyPath -N "$passphrase" 2>&1 | Out-Null
+    # Tratar passphrase vazia — ssh-keygen no Windows precisa de '""' explícito
+    if ([string]::IsNullOrEmpty($passphrase)) {
+        & ssh-keygen -t ed25519 -C $sysInfo.Comment -f $keyPath -N '""' 2>&1 | Out-Null
+    } else {
+        & ssh-keygen -t ed25519 -C $sysInfo.Comment -f $keyPath -N $passphrase 2>&1 | Out-Null
+    }
     $exitCode = $LASTEXITCODE
 
     if ($exitCode -ne 0) {
