@@ -208,13 +208,27 @@ main() {
             read -r host_alias < /dev/tty
             [ -z "${host_alias}" ] && host_alias="pi"
 
+            echo -n "    Digite a porta SSH (ex: 22, 2222) [padrao: 22]: " > /dev/tty
+            read -r pi_port < /dev/tty
+            [ -z "${pi_port}" ] && pi_port="22"
+
             SSH_CONFIG="${SSH_DIR}/config"
 
-            NEW_BLOCK="
+            # Montar bloco com Port apenas se diferente de 22
+            if [ "${pi_port}" = "22" ]; then
+                NEW_BLOCK="
 Host ${host_alias}
     HostName ${pi_host}
     User ${pi_user}
     IdentityFile ~/.ssh/raspberrypi"
+            else
+                NEW_BLOCK="
+Host ${host_alias}
+    HostName ${pi_host}
+    User ${pi_user}
+    Port ${pi_port}
+    IdentityFile ~/.ssh/raspberrypi"
+            fi
 
             # Verificar se já existe um bloco com esse alias no config
             if [ -f "${SSH_CONFIG}" ] && grep -q "^Host ${host_alias}$" "${SSH_CONFIG}"; then

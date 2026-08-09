@@ -194,6 +194,11 @@ function Main {
                 $hostAlias = "pi"
             }
 
+            $piPort = Read-Host "    Digite a porta SSH (ex: 22, 2222) [padrao: 22]"
+            if ([string]::IsNullOrWhiteSpace($piPort)) {
+                $piPort = "22"
+            }
+
             $sshConfigPath = Join-Path $sshDir "config"
 
             # Verificar se já existe um bloco "Host pi" no config
@@ -205,13 +210,25 @@ function Main {
                 }
             }
 
-            $newBlock = @"
+            # Montar bloco com Port apenas se diferente de 22
+            if ($piPort -eq "22") {
+                $newBlock = @"
 
 Host $hostAlias
     HostName $piHost
     User $piUser
     IdentityFile ~/.ssh/raspberrypi
 "@
+            } else {
+                $newBlock = @"
+
+Host $hostAlias
+    HostName $piHost
+    User $piUser
+    Port $piPort
+    IdentityFile ~/.ssh/raspberrypi
+"@
+            }
 
             if ($configExists) {
                 Write-Info "Ja existe um bloco 'Host pi' no config."
