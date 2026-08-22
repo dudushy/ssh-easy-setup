@@ -1,6 +1,6 @@
 # =============================================================================
 # SSH Easy Setup - Client Script (Windows PowerShell)
-# Gera um par de chaves SSH ed25519 para conexão com o Raspberry Pi
+# Gera um par de chaves SSH ed25519 para conexão com qualquer servidor SSH
 # =============================================================================
 
 $ErrorActionPreference = "Stop"
@@ -67,9 +67,33 @@ function Main {
     Write-Info "Comentario da chave: $($sysInfo.Comment)"
     Write-Host ""
 
+    # Perguntar alias SSH
+    Write-Host "=============================================" -ForegroundColor Cyan
+    Write-Host "   CONFIGURACAO DA CHAVE" -ForegroundColor Cyan
+    Write-Host "=============================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Step "Qual alias deseja usar para conectar via SSH?"
+    Write-Info "Exemplo: 'ssh server', 'ssh prod', 'ssh homelab'"
+    Write-Host ""
+    $hostAlias = Read-Host "    Alias [padrao: server]"
+    if ([string]::IsNullOrWhiteSpace($hostAlias)) {
+        $hostAlias = "server"
+    }
+    Write-Host ""
+
+    # Perguntar nome do arquivo da chave
+    Write-Step "Qual nome para o arquivo da chave?"
+    Write-Info "Sera salvo em: ~/.ssh/<nome>"
+    Write-Host ""
+    $keyName = Read-Host "    Nome do arquivo [padrao: $hostAlias]"
+    if ([string]::IsNullOrWhiteSpace($keyName)) {
+        $keyName = $hostAlias
+    }
+    Write-Host ""
+
     # Definir caminho da chave
     $sshDir = Join-Path $env:USERPROFILE ".ssh"
-    $keyPath = Join-Path $sshDir "raspberrypi"
+    $keyPath = Join-Path $sshDir $keyName
     $keyPathPub = "$keyPath.pub"
 
     # Criar diretório .ssh se não existir
@@ -138,7 +162,7 @@ function Main {
     # Exibir a chave pública
     Write-Host ""
     Write-Host "=============================================" -ForegroundColor Cyan
-    Write-Host "   SUA CHAVE PUBLICA (copie e adicione no Pi)" -ForegroundColor Cyan
+    Write-Host "   SUA CHAVE PUBLICA (copie e adicione no servidor)" -ForegroundColor Cyan
     Write-Host "=============================================" -ForegroundColor Cyan
     Write-Host ""
     $publicKey = Get-Content $keyPathPub
@@ -157,14 +181,14 @@ function Main {
     # Instruções do próximo passo
     Write-Host ""
     Write-Step "Proximo passo:"
-    Write-Info "No Raspberry Pi, use o alias para adicionar esta chave:"
+    Write-Info "No servidor, use o alias para adicionar esta chave:"
     Write-Host ""
     Write-Host '    ssh-add-key "' -NoNewline -ForegroundColor Yellow
     Write-Host "$publicKey" -NoNewline -ForegroundColor Green
     Write-Host '"' -ForegroundColor Yellow
     Write-Host ""
-    Write-Info "Ou, se for a primeira vez configurando o Pi:"
-    Write-Host '    curl -sSL https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/server/setup-pi.sh | bash' -ForegroundColor Yellow
+    Write-Info "Ou, se for a primeira vez configurando o servidor:"
+    Write-Host '    curl -sSL https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/server/setup-server.sh | bash' -ForegroundColor Yellow
     Write-Host ""
 
     # Configurar ~/.ssh/config
@@ -173,97 +197,97 @@ function Main {
     Write-Host "   CONFIGURAR SSH CONFIG" -ForegroundColor Cyan
     Write-Host "=============================================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Step "Deseja configurar o ~/.ssh/config para conectar facilmente ao Pi?"
-    Write-Info "Isso permite usar 'ssh pi' ao inves de 'ssh -i ~/.ssh/raspberrypi pi@host'"
+    Write-Step "Deseja configurar o ~/.ssh/config para conectar facilmente ao servidor?"
+    Write-Info "Isso permite usar 'ssh $hostAlias' ao inves de 'ssh -i ~/.ssh/$keyName user@host'"
     Write-Host ""
     $configChoice = Read-Host "    Configurar? (S/n)"
 
     if ($configChoice -ne "n" -and $configChoice -ne "N") {
-        $piHost = Read-Host "    Digite o hostname ou IP do Pi (ex: 192.168.1.100 ou pi.exemplo.com)"
+        Write-Host ""
+        $serverHost = Read-Host "    Digite o hostname ou IP do servidor (ex: 192.168.1.100 ou server.exemplo.com)"
 
-        if ([string]::IsNullOrWhiteSpace($piHost)) {
+        if ([string]::IsNullOrWhiteSpace($serverHost)) {
             Write-Error-Custom "Hostname vazio. Pulando configuracao do SSH config."
         } else {
-            $piUser = Read-Host "    Digite o usuario do Pi (ex: pi) [padrao: pi]"
-            if ([string]::IsNullOrWhiteSpace($piUser)) {
-                $piUser = "pi"
-            }
+            $serverUser = Read-Host "    Digite o usuario do servidor"
 
-            $hostAlias = Read-Host "    Digite o alias para o SSH (ex: pi) [padrao: pi]"
-            if ([string]::IsNullOrWhiteSpace($hostAlias)) {
-                $hostAlias = "pi"
-            }
-
-            $piPort = Read-Host "    Digite a porta SSH (ex: 22, 2222) [padrao: 22]"
-            if ([string]::IsNullOrWhiteSpace($piPort)) {
-                $piPort = "22"
-            }
-
-            $sshConfigPath = Join-Path $sshDir "config"
-
-            # Verificar se já existe um bloco "Host pi" no config
-            $configExists = $false
-            if (Test-Path $sshConfigPath) {
-                $existingConfig = Get-Content $sshConfigPath -Raw
-                if ($existingConfig -match "(?m)^Host\s+$hostAlias\s*$") {
-                    $configExists = $true
-                }
-            }
-
-            # Montar bloco com Port apenas se diferente de 22
-            if ($piPort -eq "22") {
-                $newBlock = @"
-
-Host $hostAlias
-    HostName $piHost
-    User $piUser
-    IdentityFile ~/.ssh/raspberrypi
-"@
+            if ([string]::IsNullOrWhiteSpace($serverUser)) {
+                Write-Error-Custom "Usuario obrigatorio. Pulando configuracao do SSH config."
             } else {
-                $newBlock = @"
+                $serverPort = Read-Host "    Digite a porta SSH [padrao: 22]"
+                if ([string]::IsNullOrWhiteSpace($serverPort)) {
+                    $serverPort = "22"
+                }
 
-Host $hostAlias
-    HostName $piHost
-    User $piUser
-    Port $piPort
-    IdentityFile ~/.ssh/raspberrypi
-"@
-            }
+                $sshConfigPath = Join-Path $sshDir "config"
 
-            if ($configExists) {
-                Write-Info "Ja existe um bloco 'Host pi' no config."
-                $overwriteConfig = Read-Host "    Deseja sobrescrever? (s/N)"
-                if ($overwriteConfig -eq "s" -or $overwriteConfig -eq "S") {
-                    # Remover bloco antigo e adicionar novo
-                    $lines = Get-Content $sshConfigPath
-                    $newLines = @()
-                    $skip = $false
-                    foreach ($line in $lines) {
-                        if ($line -match "^Host\s+$hostAlias\s*$") {
-                            $skip = $true
-                            continue
-                        }
-                        if ($skip -and $line -match "^Host\s+") {
-                            $skip = $false
-                        }
-                        if (-not $skip) {
-                            $newLines += $line
-                        }
+                # Verificar se já existe um bloco com esse alias no config
+                $configExists = $false
+                if (Test-Path $sshConfigPath) {
+                    $existingConfig = Get-Content $sshConfigPath -Raw
+                    if ($existingConfig -match "(?m)^Host\s+$hostAlias\s*$") {
+                        $configExists = $true
                     }
-                    $newLines | Set-Content $sshConfigPath
-                    Add-Content $sshConfigPath $newBlock
-                    Write-Success "SSH config atualizado!"
-                } else {
-                    Write-Info "Config mantido sem alteracoes."
                 }
-            } else {
-                # Adicionar novo bloco
-                Add-Content $sshConfigPath $newBlock
-                Write-Success "SSH config configurado!"
-            }
 
-            Write-Host ""
-            Write-Success "Agora voce pode conectar com: ssh $hostAlias"
+                # Montar bloco com Port apenas se diferente de 22
+                if ($serverPort -eq "22") {
+                    $newBlock = @"
+
+Host $hostAlias
+    HostName $serverHost
+    User $serverUser
+    IdentityFile ~/.ssh/$keyName
+"@
+                } else {
+                    $newBlock = @"
+
+Host $hostAlias
+    HostName $serverHost
+    User $serverUser
+    Port $serverPort
+    IdentityFile ~/.ssh/$keyName
+"@
+                }
+
+                if ($configExists) {
+                    Write-Info "Ja existe um bloco 'Host $hostAlias' no config."
+                    $overwriteConfig = Read-Host "    Deseja sobrescrever? (s/N)"
+                    if ($overwriteConfig -eq "s" -or $overwriteConfig -eq "S") {
+                        # Remover bloco antigo e adicionar novo
+                        $lines = Get-Content $sshConfigPath
+                        $newLines = @()
+                        $skip = $false
+                        foreach ($line in $lines) {
+                            if ($line -match "^Host\s+$hostAlias\s*$") {
+                                $skip = $true
+                                continue
+                            }
+                            if ($skip -and $line -match "^Host\s+") {
+                                $skip = $false
+                            }
+                            if (-not $skip) {
+                                $newLines += $line
+                            }
+                        }
+                        $newLines | Set-Content $sshConfigPath
+                        Add-Content $sshConfigPath $newBlock
+                        Write-Success "SSH config atualizado!"
+                    } else {
+                        Write-Info "Config mantido sem alteracoes."
+                    }
+                } else {
+                    # Adicionar novo bloco
+                    if (-not (Test-Path $sshConfigPath)) {
+                        New-Item -ItemType File -Path $sshConfigPath -Force | Out-Null
+                    }
+                    Add-Content $sshConfigPath $newBlock
+                    Write-Success "SSH config configurado!"
+                }
+
+                Write-Host ""
+                Write-Success "Agora voce pode conectar com: ssh $hostAlias"
+            }
         }
     }
     Write-Host ""

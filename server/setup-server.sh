@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
-# SSH Easy Setup - Server Script (Raspberry Pi)
-# Configura o Pi para aceitar conexões SSH via chave pública,
+# SSH Easy Setup - Server Script (Linux)
+# Configura o servidor para aceitar conexões SSH via chave pública,
 # instala aliases úteis e desabilita login por senha (com segurança).
 # Executar apenas 1 vez.
 # =============================================================================
@@ -20,7 +20,7 @@ NC='\033[0m'
 header() {
     echo ""
     echo -e "${CYAN}=============================================${NC}"
-    echo -e "${CYAN}   SSH Easy Setup - Configuracao do Pi${NC}"
+    echo -e "${CYAN}   SSH Easy Setup - Configuracao do Servidor${NC}"
     echo -e "${CYAN}=============================================${NC}"
     echo ""
 }
@@ -498,16 +498,16 @@ ALIASES
 main() {
     header
 
-    # Verificar se está no Pi (ou pelo menos Linux)
+    # Verificar se está em Linux
     if [ "$(uname)" != "Linux" ]; then
-        error "Este script deve ser executado no Raspberry Pi (Linux)."
+        error "Este script deve ser executado em um servidor Linux."
         exit 1
     fi
 
     # Detectar shell do usuário
     detect_shell_rc
 
-    step "Iniciando configuracao do Raspberry Pi..."
+    step "Iniciando configuracao do servidor SSH..."
     info "Shell detectado: ${SHELL_NAME} (${SHELL_RC})"
     echo ""
 
@@ -630,7 +630,7 @@ main() {
         warn "IMPORTANTE: Antes de desabilitar o login por senha,"
         warn "teste a conexao SSH com a chave em OUTRO terminal:"
         echo ""
-        echo -e "    ${YELLOW}ssh -i ~/.ssh/raspberrypi pi@<IP_DO_PI>${NC}"
+        echo -e "    ${YELLOW}ssh -i ~/.ssh/<sua-chave> <usuario>@<IP_DO_SERVIDOR>${NC}"
         echo ""
         step "A conexao via chave funcionou corretamente?"
         echo ""
@@ -639,7 +639,7 @@ main() {
         if [ "${confirm}" != "s" ] && [ "${confirm}" != "S" ]; then
             echo ""
             warn "Operacao parcial: PubkeyAuthentication esta habilitado mas login por senha NAO foi desabilitado."
-            info "Voce ainda pode acessar o Pi com senha."
+            info "Voce ainda pode acessar o servidor com senha."
             info "Quando testar a chave, rode novamente este script ou execute manualmente:"
             info "  sudo rm /etc/ssh/sshd_config.d/50-cloud-init.conf 2>/dev/null"
             info "  sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config"

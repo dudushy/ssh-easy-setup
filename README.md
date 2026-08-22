@@ -1,12 +1,12 @@
 # SSH Easy Setup 🔑
 
-Scripts para facilitar a criação e gerenciamento de chaves SSH para conexão com o Raspberry Pi.
+Scripts para facilitar a criação e gerenciamento de chaves SSH para conexão com qualquer servidor Linux.
 
 ## Visão Geral
 
 - **Gere chaves SSH** no seu PC (Windows, Linux ou Mac) com um único comando
-- **Configure o Pi** para aceitar conexões por chave e desabilitar senha
-- **Gerencie chaves** com aliases simples no Pi
+- **Configure o servidor** para aceitar conexões por chave e desabilitar senha
+- **Gerencie chaves** com aliases simples no servidor
 
 ## Quick Start
 
@@ -14,34 +14,39 @@ Scripts para facilitar a criação e gerenciamento de chaves SSH para conexão c
 
 **Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/client/setup-ssh.ps1 | iex
+irm https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/client/setup-client.ps1 | iex
 ```
 
 **Linux/Mac (Bash):**
 ```bash
-curl -sSL https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/client/setup-ssh.sh | bash
+curl -sSL https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/client/setup-client.sh | bash
 ```
 
 O script irá:
 - Detectar seu **usuário**, **nome da máquina** e **sistema operacional**
-- Gerar uma chave `ed25519` salva em `~/.ssh/raspberrypi`
+- Perguntar o **alias SSH** desejado (ex: `server`, `prod`, `homelab`) — padrão: `server`
+- Perguntar o **nome do arquivo** da chave (padrão: mesmo nome do alias)
+- Gerar uma chave `ed25519` salva em `~/.ssh/<nome_escolhido>`
 - Criar o comentário no formato: `usuario@MAQUINA-OS`
 - Perguntar se deseja definir uma passphrase (opcional)
 - Exibir a chave pública e copiar para a área de transferência
+- Perguntar se deseja configurar o `~/.ssh/config` para acesso simplificado
 
 **Exemplo de comentário gerado:**
 - Windows: `dudushy@BB1337-Windows`
 - Ubuntu: `dudushy@desktop-Ubuntu`
 - macOS: `dudushy@MacBook-macOS`
 
-### 2. No Raspberry Pi — Configuração inicial (1ª vez)
+### 2. No servidor Linux — Configuração inicial (1ª vez)
+
+> **Nota:** O script do servidor deve ser executado em um servidor **Linux**.
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/server/setup-pi.sh | bash
+curl -sSL https://raw.githubusercontent.com/dudushy/ssh-easy-setup/main/server/setup-server.sh | bash
 ```
 
 O script irá:
-1. Detectar o shell do Pi (zsh ou bash) e instalar aliases no arquivo correto
+1. Detectar o shell do servidor (zsh ou bash) e instalar aliases no arquivo correto
 2. Habilitar `PubkeyAuthentication yes`
 3. Pedir que você cole/adicione sua chave pública
 4. Pedir confirmação de que **testou a conexão** em outro terminal
@@ -56,7 +61,7 @@ O script irá:
 
 ### 3. Adicionando novos dispositivos (após setup)
 
-No Pi, use o alias:
+No servidor, use o alias:
 ```bash
 ssh-add-key "ssh-ed25519 AAAA... usuario@MAQUINA-OS"
 ```
@@ -77,7 +82,7 @@ Ou direto pelo número:
 ssh-remove-key 2
 ```
 
-### 4. Listando dispositivos autorizados
+### 5. Listando dispositivos autorizados
 
 ```bash
 ssh-list-keys
@@ -94,17 +99,17 @@ Saída:
 
 ## Parâmetros do script do servidor
 
-O `setup-pi.sh` aceita parâmetros para adicionar a chave sem modo interativo:
+O `setup-server.sh` aceita parâmetros para adicionar a chave sem modo interativo:
 
 ```bash
 # Via arquivo
-curl -sSL .../server/setup-pi.sh | bash -s -- --file-path=/tmp/chave.pub
+curl -sSL .../server/setup-server.sh | bash -s -- --file-path=/tmp/chave.pub
 
 # Via texto direto
-curl -sSL .../server/setup-pi.sh | bash -s -- --raw-data="ssh-ed25519 AAAA... usuario@MAQUINA-OS"
+curl -sSL .../server/setup-server.sh | bash -s -- --raw-data="ssh-ed25519 AAAA... usuario@MAQUINA-OS"
 
 # Modo interativo (o script pede para colar a chave)
-curl -sSL .../server/setup-pi.sh | bash
+curl -sSL .../server/setup-server.sh | bash
 ```
 
 > **Nota:** Quando executado via `curl | bash`, o modo interativo lê input do `/dev/tty` (seu teclado), então funciona normalmente mesmo com o pipe.
@@ -113,10 +118,10 @@ curl -sSL .../server/setup-pi.sh | bash
 
 ```
 ├── client/
-│   ├── setup-ssh.ps1    # Gerador de chaves (Windows PowerShell)
-│   └── setup-ssh.sh     # Gerador de chaves (Linux/Mac Bash)
+│   ├── setup-client.ps1    # Gerador de chaves (Windows PowerShell)
+│   └── setup-client.sh     # Gerador de chaves (Linux/Mac Bash)
 └── server/
-    └── setup-pi.sh      # Configuração do Pi (executar 1x)
+    └── setup-server.sh     # Configuração do servidor (executar 1x)
 ```
 
 ## Decisões Técnicas
@@ -124,10 +129,12 @@ curl -sSL .../server/setup-pi.sh | bash
 | Item | Valor |
 |------|-------|
 | Tipo de chave | ed25519 |
-| Nome do arquivo | `~/.ssh/raspberrypi` |
+| Nome do arquivo | `~/.ssh/<escolhido pelo usuário>` (padrão: nome do alias) |
+| Alias SSH | Escolhido pelo usuário (padrão: `server`) |
 | Comentário da chave | `usuario@MAQUINA-OS` |
 | Passphrase | Opcional (pergunta ao usuário) |
-| Usuário no Pi | `pi` |
+| Usuário no servidor | Obrigatório (sem padrão) |
+| Servidor | Deve ser Linux |
 | Shell suportado | zsh e bash (detecção automática) |
 | Input via pipe | Lê de `/dev/tty` (funciona com `curl \| bash`) |
 | Root login | Desabilitado |
@@ -150,4 +157,4 @@ Se você não confirmar o teste, o login por senha **não** será desabilitado.
 
 ### Problema comum: cloud-init
 
-No Raspberry Pi OS, o cloud-init cria `/etc/ssh/sshd_config.d/50-cloud-init.conf` com `PasswordAuthentication yes` no primeiro boot. Como o `Include` é processado antes do `sshd_config`, esse arquivo sobrescreve qualquer configuração manual. O script detecta e remove esses overrides automaticamente.
+Em alguns servidores Linux, o cloud-init cria `/etc/ssh/sshd_config.d/50-cloud-init.conf` com `PasswordAuthentication yes` no primeiro boot. Como o `Include` é processado antes do `sshd_config`, esse arquivo sobrescreve qualquer configuração manual. O script detecta e remove esses overrides automaticamente.
